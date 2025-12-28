@@ -11,6 +11,11 @@ app.use(express.json());
 // 🔐 Admin panel static route
 app.use("/admin", express.static(__dirname + "/admin"));
 
+// 🔎 health check (optional but useful)
+app.get("/", (req, res) => {
+  res.send("🔥 OMEGLO backend running");
+});
+
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
@@ -55,6 +60,7 @@ io.on("connection", (socket) => {
   /* 🔢 ONLINE COUNT */
   onlineUsers++;
   io.emit("online-count", onlineUsers);
+  console.log("User connected | Online:", onlineUsers);
 
   /* 🚫 PERMANENT BAN CHECK */
   if (bans[ip]) {
@@ -123,8 +129,7 @@ io.on("connection", (socket) => {
 
   /* 🔞 AI NUDITY FRAME (HOOK READY) */
   socket.on("frame", () => {
-    // AI hook ready (already handled in previous step)
-    // Intentionally left light to avoid CPU abuse
+    // AI hook ready
   });
 
   /* 🔁 WEBRTC SIGNALING */
@@ -150,16 +155,14 @@ io.on("connection", (socket) => {
     onlineUsers--;
     if (onlineUsers < 0) onlineUsers = 0;
     io.emit("online-count", onlineUsers);
+    console.log("User disconnected | Online:", onlineUsers);
   });
 });
 
 /* =========================
-   START SERVER
+   START SERVER (🔥 FIXED FOR RENDER)
 ========================= */
-server.listen(5000, () => {
-  console.log("🔥 OMEGLO SERVER RUNNING");
-  console.log("• Online count: ON");
-  console.log("• Permanent ban: ON");
-  console.log("• Start page flow: ON");
-  console.log("http://localhost:5000");
+const PORT = process.env.PORT || 5000;
+server.listen(PORT, () => {
+  console.log("🔥 OMEGLO SERVER RUNNING ON PORT", PORT);
 });
