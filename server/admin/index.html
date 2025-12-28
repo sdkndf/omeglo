@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Omeglo Admin</title>
+<style>
+body{font-family:Arial;background:#111;color:#eee;padding:20px}
+h1{color:#4f8cff}
+table{border-collapse:collapse;width:100%}
+td,th{border:1px solid #333;padding:8px}
+button{background:#ff4f4f;border:none;padding:5px;color:white;cursor:pointer}
+</style>
+</head>
+<body>
+
+<h1>🔐 Omeglo Admin Panel</h1>
+
+<table id="table">
+<tr><th>IP</th><th>Reason</th><th>Time</th><th>Action</th></tr>
+</table>
+
+<script>
+async function load() {
+  const res = await fetch("http://localhost:5000/admin/bans", {
+    headers: {
+      Authorization: "Basic " + btoa("admin:admin123")
+    }
+  });
+  const data = await res.json();
+  const table = document.getElementById("table");
+  Object.keys(data).forEach(ip => {
+    const b = data[ip];
+    const row = table.insertRow();
+    row.innerHTML = `
+      <td>${ip}</td>
+      <td>${b.reason}</td>
+      <td>${b.bannedAt}</td>
+      <td><button onclick="unban('${ip}')">Unban</button></td>
+    `;
+  });
+}
+
+async function unban(ip) {
+  await fetch("http://localhost:5000/admin/unban", {
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json",
+      Authorization:"Basic "+btoa("admin:admin123")
+    },
+    body:JSON.stringify({ip})
+  });
+  location.reload();
+}
+
+load();
+</script>
+</body>
+</html>

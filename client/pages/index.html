@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Omeglo</title>
+
+<style>
+:root{
+  --bg:#0e0f13;--panel:#16181d;--border:#2a2d36;
+  --accent:#4f8cff;--text:#e6e6e6;--muted:#9aa0aa;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial;background:var(--bg);color:var(--text)}
+.top{
+  background:linear-gradient(90deg,#4f8cff,#7a4fff);
+  padding:12px;font-size:22px;font-weight:bold
+}
+button{
+  padding:10px 20px;
+  background:var(--accent);
+  border:none;color:white;cursor:pointer
+}
+.small{background:#333}
+input{
+  padding:8px;background:#0f1116;color:var(--text);
+  border:1px solid var(--border)
+}
+
+/* ===== SCREENS ===== */
+.screen{display:none;text-align:center;margin-top:60px}
+.screen.active{display:block}
+
+/* ===== CHAT ===== */
+.container{
+  display:none;gap:12px;padding:12px;height:calc(100vh - 60px)
+}
+.left{width:340px;display:flex;flex-direction:column;gap:10px}
+video{width:100%;height:50%;background:black;border:2px solid var(--border)}
+.right{flex:1;display:flex;flex-direction:column}
+.status{font-size:14px;color:var(--muted)}
+.counter{font-size:13px;color:#ccc}
+.chat{flex:1;background:var(--panel);border:1px solid var(--border);padding:8px;overflow:auto}
+.controls{display:flex;gap:6px;margin-top:6px}
+.typing{font-size:12px;color:#aaa}
+
+.me{color:#4f8cff}
+.system{color:var(--muted);font-style:italic}
+</style>
+</head>
+
+<body>
+
+<div class="top">Omeglo</div>
+
+<!-- 1️⃣ AGE GATE -->
+<div class="screen active" id="ageGate">
+  <h1>Are you 18+?</h1>
+  <p>You must be 18 or older to use this site.</p>
+  <button onclick="goMode()">I am 18+</button>
+</div>
+
+<!-- 2️⃣ MODE SELECT -->
+<div class="screen" id="modeSelect">
+  <h1>Select chat mode</h1>
+  <input id="interestHome" placeholder="Interests (optional)">
+  <br><br>
+  <button onclick="start('text')">Text Chat</button>
+  <button onclick="start('video')">Video Chat</button>
+</div>
+
+<!-- 3️⃣ CHAT -->
+<div class="container" id="chatUI">
+
+  <div class="left" id="videoBox">
+    <video id="local" autoplay muted playsinline></video>
+    <video id="remote" autoplay playsinline></video>
+    <button class="small" onclick="fullscreen()">Fullscreen</button>
+  </div>
+
+  <div class="right">
+    <div class="status" id="status">Connecting…</div>
+    <div class="counter">Online now: <span id="online">0</span></div>
+
+    <input id="interestChat" placeholder="Interests (change anytime)">
+    <button class="small" onclick="updateInterests()">Update Interests</button>
+
+    <div class="chat" id="chat"></div>
+    <div class="typing" id="typing"></div>
+
+    <div class="controls">
+      <input id="msg" placeholder="Type message">
+      <button onclick="send()">Send</button>
+      <button onclick="next()">Next</button>
+      <button class="small" onclick="report()">Report</button>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script>
+const socket = io("http://localhost:5000");
+
+const screens = {
+  ageGate:document.getElementById("ageGate"),
+  modeSelect:document.getElementById("modeSelect")
+};
+const chatUI = document.getElementById("chatUI");
+const videoBox = document.getElementById("videoBox");
+
+const chat = document.getElementById("chat");
+const typing = document.getElementById("typing");
+const status = document.getElementById("status");
+const online = document.getElementById("online");
+
+let mode = "text";
+
+/* ===== NAV ===== */
+function show(id){
+  Object.values(screens).forEach(s=>s.classList.remove("active"));
+  if(id) screens[id].classList.add("active");
+}
+function goMode(){ show("modeSelect"); }
+
+/* ===== START ===== */
+function start(m){
+  mode = m;
+  show(null);
+  chatUI.style.display="flex";
+
+  if(mode==="text") videoBox.style.display="none";
+  else startMedia();
+
+  document.getElementById("interestChat").value =
+    document.getElementById("interestHome").value;
+
+  socket.emit("join", getInterests());
+}
+
+/* ===== INTERESTS ===== */
+function getInterests(){
+  return document.getElementById("interestChat").value
+    .split(",").map(x=>x.trim()).filter(Boolean);
+}
+function updateInterests(){
+  chat.innerHTML="";
+  socket.emit("next");
+  socket.emit("join", getInterests());
+}
+
+/* ===== CHAT ===== */
+function log(t,c="system"){
+  const d=document.createElement("div");
+  d.className=c; d.innerText=t;
+  chat.appendChild(d); chat.scrollTop=99999;
+}
+function send(){
+  const i=document.getElementById("msg");
+  if(!i.value)return;
+  socket.emit("message",i.value);
+  log("You: "+i.value,"me");
+  i.value="";
+  socket.emit("typing");
+}
+socket.on("message",m=>log("Stranger: "+m));
+socket.on("matched",()=>log("Connected to stranger"));
+socket.on("partner_left",()=>log("Stranger left"));
+socket.on("typing",()=>{
+  typing.innerText="Stranger is typing…";
+  setTimeout(()=>typing.innerText="",800);
+});
+
+/* ===== ONLINE ===== */
+socket.on("online-count",n=>online.innerText=n);
+
+/* ===== CONTROLS ===== */
+function next(){ socket.emit("next"); chat.innerHTML=""; }
+function report(){ socket.emit("report"); alert("Reported"); }
+
+/* ===== VIDEO ===== */
+async function startMedia(){
+  const s = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+  document.getElementById("local").srcObject=s;
+}
+function fullscreen(){
+  const v=document.getElementById("remote");
+  if(v.requestFullscreen)v.requestFullscreen();
+}
+</script>
+
+</body>
+</html>
