@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
   <!-- Socket.io -->
-  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
 
   <style>
     * { box-sizing: border-box; font-family: Arial, sans-serif; }
@@ -75,6 +75,8 @@
 </div>
 
 <script>
+  console.log("Socket lib loaded:", typeof io);
+
   const socket = io("https://omeglo-server.onrender.com", {
     transports: ["websocket"]
   });
@@ -84,19 +86,35 @@
   const messages = document.getElementById("messages");
   const input = document.getElementById("msgInput");
 
+  /* ======================
+     SOCKET DEBUG (IMPORTANT)
+  ====================== */
   socket.on("connect", () => {
+    console.log("✅ CONNECTED:", socket.id);
     statusEl.innerText = "Connected. Waiting for stranger…";
   });
 
-  socket.on("online-count", n => {
+  socket.on("connect_error", (e) => {
+    console.error("❌ SOCKET ERROR:", e.message);
+    statusEl.innerText = "Server connection failed";
+  });
+
+  /* ======================
+     ONLINE COUNT (FIXED)
+  ====================== */
+  socket.on("online-count", (n) => {
+    console.log("ONLINE COUNT:", n);
     online.innerText = n;
   });
 
+  /* ======================
+     CHAT EVENTS
+  ====================== */
   socket.on("matched", () => {
     statusEl.innerText = "Connected with stranger";
   });
 
-  socket.on("message", msg => {
+  socket.on("message", (msg) => {
     addMsg("stranger", msg);
   });
 
@@ -104,6 +122,9 @@
     statusEl.innerText = "Stranger left";
   });
 
+  /* ======================
+     FUNCTIONS
+  ====================== */
   function addMsg(type, text) {
     const div = document.createElement("div");
     div.className = "msg " + type;
@@ -132,7 +153,7 @@
 
   function startChat() {
     document.getElementById("landing").style.display = "none";
-    socket.emit("join");   // 🔥 MOST IMPORTANT LINE
+    socket.emit("join");   // ✅ REQUIRED FOR SERVER
   }
 </script>
 </body>
