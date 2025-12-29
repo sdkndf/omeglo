@@ -8,160 +8,145 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 🔐 Admin panel static route
+// ================== ADMIN PANEL ==================
 app.use("/admin", express.static(__dirname + "/admin"));
 
-// 🔎 health check (optional but useful)
+// ================== HEALTH CHECK =================
 app.get("/", (req, res) => {
-  res.send("🔥 OMEGLO backend running");
+  res.send("🔥 OMEGLO SERVER RUNNING");
 });
 
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
+const io = new Server(server, {
+  cors: { origin: "*" }
+});
 
-/* =========================
-   ONLINE COUNT
-========================= */
+// ================== ONLINE COUNT =================
 let onlineUsers = 0;
 
-/* =========================
-   BAN STORAGE (PERMANENT)
-========================= */
-const DATA_FILE = "./bans.json";
-let bans = fs.existsSync(DATA_FILE)
-  ? JSON.parse(fs.readFileSync(DATA_FILE))
-  : {};
+// ================== MATCHING QUEUE =================
+let waitingQueue = [];
 
-function saveBans() {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(bans, null, 2));
-}
+// ================== INTEREST STORAGE =================
+// socket.id -> interests array
+const interestsMap = {};
 
-/* =========================
-   HELPERS
-========================= */
+// ================== REPORT STORAGE (simple) =================
+const reports = {}; // ip -> count
+
 function getIP(socket) {
   return (
     socket.handshake.headers["x-forwarded-for"] ||
-    socket.handshake.address
+    socket.handshake.address ||
+    "unknown"
   );
 }
 
-/* =========================
-   MATCHING QUEUE
-========================= */
-let waiting = [];
-
-/* =========================
-   SOCKET.IO
-========================= */
+// ================== SOCKET =================
 io.on("connection", (socket) => {
   const ip = getIP(socket);
 
-  /* 🔢 ONLINE COUNT */
+  // ---------- ONLINE COUNT ----------
   onlineUsers++;
+  console.log("CONNECT:", socket.id, "ONLINE:", onlineUsers);
   io.emit("online-count", onlineUsers);
-  console.log("User connected | Online:", onlineUsers);
 
-  /* 🚫 PERMANENT BAN CHECK */
-  if (bans[ip]) {
-    socket.emit("banned", "You are permanently banned");
-    socket.disconnect();
-    onlineUsers--;
-    io.emit("online-count", onlineUsers);
-    return;
-  }
+  // force client sync (cache/debug)
+  socket.on("force-online-check", () => {
+    socket.emit("online-count", onlineUsers);
+  });
 
-  /* 🟢 USER JOINS CHAT (START BUTTON) */
+  // ---------- INTERESTS ----------
+  socket.on("setInterests", (interestStr) => {
+    if (!interestStr) {
+      interestsMap[socket.id] = [];
+    } else {
+      interestsMap[socket.id] = interestStr
+        .split(",")
+        .map(x => x.trim().toLowerCase())
+        .filter(Boolean);
+    }
+  });
+
+  // ---------- JOIN QUEUE ----------
   socket.on("join", () => {
-    waiting.push(socket);
+    if (waitingQueue.includes(socket)) return;
+
+    waitingQueue.push(socket);
     socket.emit("waiting");
 
-    if (waiting.length >= 2) {
-      const a = waiting.shift();
-      const b = waiting.shift();
-      a.partner = b;
-      b.partner = a;
-      a.emit("matched");
-      b.emit("matched");
-    }
+    // try matching
+    tryMatch();
   });
 
-  /* 💬 TEXT MESSAGE + ABUSE CHECK */
+  function tryMatch() {
+    if (waitingQueue.length < 2) return;
+
+    let a = waitingQueue.shift();
+    let b = waitingQueue.shift();
+
+    a.partner = b;
+    b.partner = a;
+
+    a.emit("matched");
+    b.emit("matched");
+  }
+
+  // ---------- MESSAGE ----------
   socket.on("message", (msg) => {
-    const badWords = [
-      "fuck","bitch","asshole","sex","nude",
-      "madarchod","chutiya","bhenchod"
-    ];
-    const lower = msg.toLowerCase();
-
-    if (badWords.some(w => lower.includes(w))) {
-      bans[ip] = {
-        reason: "Abusive language",
-        bannedAt: new Date().toISOString()
-      };
-      saveBans();
-      socket.emit("banned", "Abusive language detected");
-      socket.disconnect();
-      return;
+    if (socket.partner) {
+      socket.partner.emit("message", msg);
     }
-
-    socket.partner && socket.partner.emit("message", msg);
   });
 
-  socket.on("typing", () => {
-    socket.partner && socket.partner.emit("typing");
-  });
-
-  /* 🚨 REPORT → PERMANENT BAN */
-  socket.on("report", () => {
-    if (!socket.partner) return;
-
-    const targetIP = getIP(socket.partner);
-    bans[targetIP] = {
-      reason: "Reported by user",
-      bannedAt: new Date().toISOString()
-    };
-    saveBans();
-
-    socket.partner.emit("banned", "You are permanently banned");
-    socket.partner.disconnect();
-  });
-
-  /* 🔞 AI NUDITY FRAME (HOOK READY) */
-  socket.on("frame", () => {
-    // AI hook ready
-  });
-
-  /* 🔁 WEBRTC SIGNALING */
-  ["offer", "answer", "ice-candidate"].forEach(evt => {
-    socket.on(evt, d => socket.partner && socket.partner.emit(evt, d));
-  });
-
-  /* ⏭ NEXT */
+  // ---------- NEXT ----------
   socket.on("next", () => {
     if (socket.partner) {
       socket.partner.emit("partner_left");
       socket.partner.partner = null;
     }
     socket.partner = null;
-    waiting.push(socket);
+
+    if (!waitingQueue.includes(socket)) {
+      waitingQueue.push(socket);
+      socket.emit("waiting");
+      tryMatch();
+    }
   });
 
-  /* ❌ DISCONNECT */
+  // ---------- REPORT ----------
+  socket.on("report", () => {
+    if (!socket.partner) return;
+
+    const targetIP = getIP(socket.partner);
+    reports[targetIP] = (reports[targetIP] || 0) + 1;
+
+    console.log("REPORT:", targetIP, "COUNT:", reports[targetIP]);
+
+    socket.partner.emit("banned", "You have been reported");
+    socket.partner.disconnect();
+  });
+
+  // ---------- DISCONNECT ----------
   socket.on("disconnect", () => {
-    waiting = waiting.filter(s => s !== socket);
-    if (socket.partner) socket.partner.emit("partner_left");
+    waitingQueue = waitingQueue.filter(s => s !== socket);
+
+    if (socket.partner) {
+      socket.partner.emit("partner_left");
+      socket.partner.partner = null;
+    }
+
+    delete interestsMap[socket.id];
 
     onlineUsers--;
     if (onlineUsers < 0) onlineUsers = 0;
+
+    console.log("DISCONNECT:", socket.id, "ONLINE:", onlineUsers);
     io.emit("online-count", onlineUsers);
-    console.log("User disconnected | Online:", onlineUsers);
   });
 });
 
-/* =========================
-   START SERVER (🔥 FIXED FOR RENDER)
-========================= */
+// ================== START SERVER =================
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log("🔥 OMEGLO SERVER RUNNING ON PORT", PORT);
