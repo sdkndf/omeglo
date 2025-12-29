@@ -1,152 +1,90 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8">
 <title>Omeglo</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
 
 <style>
-body { margin:0; background:#0e0f13; color:#fff; font-family:Arial }
-header { background:linear-gradient(90deg,#4f46e5,#9333ea); padding:12px 20px; font-size:20px; }
-.hidden { display:none; }
-
-.center {
-  position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
-  background:#0e0f13; z-index:100;
-}
-.box {
-  background:#12141c; padding:30px; width:340px; border:1px solid #333;
-}
-button { width:100%; padding:10px; margin-top:10px; background:#4f46e5; color:#fff; border:none; cursor:pointer; }
-input { width:100%; padding:8px; background:#0f172a; color:#fff; border:1px solid #333; margin-top:10px; }
-
-.container { display:flex; height:calc(100vh - 50px); }
-.left { width:300px; padding:10px; display:flex; flex-direction:column; gap:10px; }
-.video { height:220px; background:#000; border:1px solid #333; }
-.right { flex:1; display:flex; flex-direction:column; padding:10px; }
-.top { display:flex; justify-content:space-between; font-size:14px; }
-#messages { flex:1; background:#12141c; border:1px solid #333; padding:10px; overflow-y:auto; }
-.msg { margin-bottom:6px; }
-.me { color:#60a5fa }
-.stranger { color:#a78bfa }
-.bar { display:flex; gap:6px; margin-top:6px; }
+body{margin:0;background:#0e0f13;color:#fff;font-family:Arial}
+header{background:#4f46e5;padding:12px;font-size:20px}
+.hidden{display:none}
+.center{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+.box{background:#12141c;padding:25px;border:1px solid #333;width:320px}
+button,input{width:100%;margin-top:10px;padding:8px}
+#chat{display:flex;height:calc(100vh - 50px)}
+#left{width:300px;background:#000}
+#right{flex:1;padding:10px}
+#msgs{height:70%;background:#12141c;overflow:auto;padding:10px}
 </style>
 </head>
 
 <body>
-<header>Omeglo</header>
+<header>Omeglo | Online: <span id="online">0</span></header>
 
-<!-- 🔞 18+ WARNING -->
-<div class="center" id="ageScreen">
+<!-- 18+ -->
+<div class="center" id="age">
   <div class="box">
-    <h2>18+ Warning</h2>
-    <p>This site may contain adult content.</p>
-    <button onclick="agreeAge()">I Agree</button>
+    <h3>18+ Warning</h3>
+    <button onclick="goMode()">I Agree</button>
   </div>
 </div>
 
-<!-- 🎛 MODE SELECT -->
-<div class="center hidden" id="modeScreen">
+<!-- MODE -->
+<div class="center hidden" id="mode">
   <div class="box">
-    <h2>Select Mode</h2>
-    <input id="interestInput" placeholder="Enter interests (optional)">
-    <button onclick="selectMode('video')">Video Chat</button>
-    <button onclick="selectMode('text')">Text Chat</button>
-    <button onclick="goBack()">⬅ Back</button>
+    <input id="interest" placeholder="Interests (optional)">
+    <button onclick="start('video')">Video Chat</button>
+    <button onclick="start('text')">Text Chat</button>
   </div>
 </div>
 
-<!-- 💬 CHAT -->
-<div class="container hidden" id="chatScreen">
-  <div class="left">
-    <div class="video" id="localVideo"></div>
-    <div class="video" id="remoteVideo"></div>
-    <button onclick="fullscreen()">Fullscreen</button>
-  </div>
-
-  <div class="right">
-    <div class="top">
-      <div id="status">Connecting…</div>
-      <div>Online: <span id="online">0</span></div>
-    </div>
-
-    <!-- interests AFTER landing -->
-    <input id="interestUpdate" placeholder="Update interests">
-
-    <div id="messages"></div>
-
-    <div class="bar">
-      <input id="msgInput" placeholder="Type message">
-      <button onclick="sendMsg()">Send</button>
-      <button onclick="nextChat()">Next</button>
-      <button onclick="report()">Report</button>
-    </div>
+<!-- CHAT -->
+<div id="chat" class="hidden">
+  <div id="left"></div>
+  <div id="right">
+    <div id="status">Connecting…</div>
+    <div id="msgs"></div>
+    <input id="msg">
+    <button onclick="send()">Send</button>
+    <button onclick="next()">Next</button>
   </div>
 </div>
 
 <script>
-const socket = io("https://omeglo-server.onrender.com",{transports:["websocket"]});
-let chatMode = "text";
+const socket = io("https://omeglo-server.onrender.com"); // render url
+const online=document.getElementById("online");
 
-const online = document.getElementById("online");
-const statusEl = document.getElementById("status");
+socket.on("online-count", n=>online.innerText=n);
+socket.on("matched",()=>status.innerText="Connected");
+socket.on("message",m=>add("Stranger: "+m));
+socket.on("partner_left",()=>status.innerText="Left");
 
-socket.on("online-count", n => online.innerText=n);
-socket.on("matched", ()=> statusEl.innerText="Connected with stranger");
-socket.on("message", m => addMsg("stranger",m));
-socket.on("partner_left", ()=> statusEl.innerText="Stranger left");
-socket.on("banned", m => { alert(m); location.reload(); });
-
-function agreeAge(){
-  document.getElementById("ageScreen").classList.add("hidden");
-  document.getElementById("modeScreen").classList.remove("hidden");
+function goMode(){
+  age.classList.add("hidden");
+  mode.classList.remove("hidden");
 }
-
-function goBack(){
-  document.getElementById("modeScreen").classList.add("hidden");
-  document.getElementById("ageScreen").classList.remove("hidden");
-}
-
-function selectMode(mode){
-  chatMode = mode;
-  document.getElementById("modeScreen").classList.add("hidden");
-  document.getElementById("chatScreen").classList.remove("hidden");
-  if(mode==="video") startVideo();
+function start(){
+  mode.classList.add("hidden");
+  chat.classList.remove("hidden");
   socket.emit("join");
 }
-
-async function startVideo(){
-  const s = await navigator.mediaDevices.getUserMedia({video:true,audio:false});
-  const v = document.createElement("video");
-  v.srcObject=s; v.autoplay=true; v.muted=true; v.style.width="100%";
-  document.getElementById("localVideo").appendChild(v);
+function send(){
+  if(!msg.value)return;
+  socket.emit("message",msg.value);
+  add("You: "+msg.value);
+  msg.value="";
 }
-
-function sendMsg(){
-  const i=document.getElementById("msgInput");
-  if(!i.value) return;
-  socket.emit("message",i.value);
-  addMsg("me",i.value);
-  i.value="";
-}
-
-function nextChat(){
-  document.getElementById("messages").innerHTML="";
+function next(){
+  msgs.innerHTML="";
   socket.emit("next");
 }
-
-function report(){ socket.emit("report"); }
-
-function addMsg(t,m){
+function add(t){
   const d=document.createElement("div");
-  d.className="msg "+t;
-  d.innerText=(t==="me"?"You: ":"Stranger: ")+m;
-  document.getElementById("messages").appendChild(d);
+  d.innerText=t;
+  msgs.appendChild(d);
 }
-
-function fullscreen(){ document.documentElement.requestFullscreen(); }
 </script>
 </body>
 </html>
