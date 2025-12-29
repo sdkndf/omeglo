@@ -1,31 +1,44 @@
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
-const cors = require("cors");
+const path = require("path");
 
 const app = express();
-app.use(cors());
-app.use(express.json());
+
+/* =========================
+   FRONTEND SERVE (IMPORTANT)
+   client/pages ko serve kar rahe
+========================= */
+app.use(express.static(path.join(__dirname, "../client/pages")));
 
 app.get("/", (req, res) => {
-  res.send("OMEGLO SERVER RUNNING");
+  res.sendFile(path.join(__dirname, "../client/pages/index.html"));
 });
 
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: "*" }
-});
+const io = new Server(server);
 
+/* =========================
+   ONLINE COUNT
+========================= */
 let onlineUsers = 0;
+
+/* =========================
+   MATCHING QUEUE
+========================= */
 let waiting = [];
 
-io.on("connection", socket => {
+/* =========================
+   SOCKET LOGIC
+========================= */
+io.on("connection", (socket) => {
   onlineUsers++;
   io.emit("online-count", onlineUsers);
-  console.log("CONNECT", onlineUsers);
 
-  socket.on("join", () => {
-    if (!waiting.includes(socket)) waiting.push(socket);
+  socket.on("join", ({ mode, interests }) => {
+    socket.mode = mode;
+    socket.interests = interests;
+    waiting.push(socket);
 
     if (waiting.length >= 2) {
       const a = waiting.shift();
@@ -37,30 +50,29 @@ io.on("connection", socket => {
     }
   });
 
-  socket.on("message", msg => {
+  socket.on("message", (msg) => {
     socket.partner && socket.partner.emit("message", msg);
   });
 
   socket.on("next", () => {
-    if (socket.partner) socket.partner.emit("partner_left");
+    if (socket.partner) {
+      socket.partner.emit("partner_left");
+      socket.partner.partner = null;
+    }
     socket.partner = null;
-    if (!waiting.includes(socket)) waiting.push(socket);
-  });
-
-  socket.on("report", () => {
-    if (socket.partner) socket.partner.disconnect();
+    waiting.push(socket);
   });
 
   socket.on("disconnect", () => {
     waiting = waiting.filter(s => s !== socket);
+    if (socket.partner) socket.partner.emit("partner_left");
     onlineUsers--;
     if (onlineUsers < 0) onlineUsers = 0;
     io.emit("online-count", onlineUsers);
-    console.log("DISCONNECT", onlineUsers);
   });
 });
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
-  console.log("SERVER RUNNING ON", PORT);
+  console.log("OMEGLO RUNNING ON PORT", PORT);
 });
