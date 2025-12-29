@@ -1,179 +1,152 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Omeglo</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta charset="UTF-8">
+<title>Omeglo</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <!-- SOCKET.IO -->
-  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+<script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
 
-  <style>
-    * { box-sizing: border-box; font-family: Arial, sans-serif; }
-    body { margin: 0; background: #0e0f13; color: #fff; }
-    header {
-      background: linear-gradient(90deg,#4f46e5,#9333ea);
-      padding: 12px 20px;
-      font-size: 20px;
-      font-weight: bold;
-    }
-    .container { display: flex; height: calc(100vh - 50px); }
-    .left { width: 300px; padding: 10px; display: flex; flex-direction: column; gap: 10px; }
-    .video { background: #000; border: 1px solid #333; height: 220px; display:flex;align-items:center;justify-content:center; }
-    .right { flex: 1; display: flex; flex-direction: column; padding: 10px; }
-    .top-bar { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 14px; }
-    #messages { flex: 1; background: #12141c; border: 1px solid #333; padding: 10px; overflow-y: auto; }
-    .msg { margin-bottom: 6px; }
-    .me { color: #60a5fa; }
-    .stranger { color: #a78bfa; }
-    .input-bar { display: flex; gap: 6px; margin-top: 6px; }
-    input { flex: 1; padding: 8px; background: #0f172a; color: #fff; border: 1px solid #333; }
-    button { padding: 8px 14px; border: none; cursor: pointer; background: #4f46e5; color: white; }
-    button.secondary { background: #374151; }
+<style>
+body { margin:0; background:#0e0f13; color:#fff; font-family:Arial }
+header { background:linear-gradient(90deg,#4f46e5,#9333ea); padding:12px 20px; font-size:20px; }
+.hidden { display:none; }
 
-    /* LANDING */
-    .landing {
-      position: fixed; inset: 0; background: #0e0f13;
-      display: flex; align-items: center; justify-content: center; z-index: 99;
-    }
-    .landing-box {
-      background: #12141c; padding: 30px;
-      border: 1px solid #333; width: 320px;
-    }
-  </style>
+.center {
+  position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+  background:#0e0f13; z-index:100;
+}
+.box {
+  background:#12141c; padding:30px; width:340px; border:1px solid #333;
+}
+button { width:100%; padding:10px; margin-top:10px; background:#4f46e5; color:#fff; border:none; cursor:pointer; }
+input { width:100%; padding:8px; background:#0f172a; color:#fff; border:1px solid #333; margin-top:10px; }
+
+.container { display:flex; height:calc(100vh - 50px); }
+.left { width:300px; padding:10px; display:flex; flex-direction:column; gap:10px; }
+.video { height:220px; background:#000; border:1px solid #333; }
+.right { flex:1; display:flex; flex-direction:column; padding:10px; }
+.top { display:flex; justify-content:space-between; font-size:14px; }
+#messages { flex:1; background:#12141c; border:1px solid #333; padding:10px; overflow-y:auto; }
+.msg { margin-bottom:6px; }
+.me { color:#60a5fa }
+.stranger { color:#a78bfa }
+.bar { display:flex; gap:6px; margin-top:6px; }
+</style>
 </head>
 
 <body>
 <header>Omeglo</header>
 
-<!-- 🔞 18+ LANDING -->
-<div class="landing" id="landing">
-  <div class="landing-box">
+<!-- 🔞 18+ WARNING -->
+<div class="center" id="ageScreen">
+  <div class="box">
     <h2>18+ Warning</h2>
     <p>This site may contain adult content.</p>
-    <input id="interestInput" placeholder="Enter interests (optional)">
-    <button onclick="startChat()">I Agree, Start</button>
+    <button onclick="agreeAge()">I Agree</button>
   </div>
 </div>
 
-<div class="container">
+<!-- 🎛 MODE SELECT -->
+<div class="center hidden" id="modeScreen">
+  <div class="box">
+    <h2>Select Mode</h2>
+    <input id="interestInput" placeholder="Enter interests (optional)">
+    <button onclick="selectMode('video')">Video Chat</button>
+    <button onclick="selectMode('text')">Text Chat</button>
+    <button onclick="goBack()">⬅ Back</button>
+  </div>
+</div>
+
+<!-- 💬 CHAT -->
+<div class="container hidden" id="chatScreen">
   <div class="left">
-    <div class="video" id="localVideo">Your video</div>
-    <div class="video" id="remoteVideo">Stranger video</div>
-    <button class="secondary" onclick="fullscreen()">Fullscreen</button>
+    <div class="video" id="localVideo"></div>
+    <div class="video" id="remoteVideo"></div>
+    <button onclick="fullscreen()">Fullscreen</button>
   </div>
 
   <div class="right">
-    <div class="top-bar">
+    <div class="top">
       <div id="status">Connecting…</div>
-      <div>Online now: <span id="online">0</span></div>
+      <div>Online: <span id="online">0</span></div>
     </div>
+
+    <!-- interests AFTER landing -->
+    <input id="interestUpdate" placeholder="Update interests">
 
     <div id="messages"></div>
 
-    <div class="input-bar">
-      <input id="msgInput" placeholder="Type message…" />
+    <div class="bar">
+      <input id="msgInput" placeholder="Type message">
       <button onclick="sendMsg()">Send</button>
-      <button class="secondary" onclick="nextChat()">Next</button>
-      <button class="secondary" onclick="report()">Report</button>
+      <button onclick="nextChat()">Next</button>
+      <button onclick="report()">Report</button>
     </div>
   </div>
 </div>
 
 <script>
-/* =====================
-   SOCKET CONNECT
-===================== */
-const socket = io("https://omeglo-server.onrender.com", {
-  transports: ["websocket"]
-});
+const socket = io("https://omeglo-server.onrender.com",{transports:["websocket"]});
+let chatMode = "text";
 
 const online = document.getElementById("online");
 const statusEl = document.getElementById("status");
-const messages = document.getElementById("messages");
-const input = document.getElementById("msgInput");
 
-/* =====================
-   ONLINE COUNT
-===================== */
-socket.on("online-count", n => {
-  console.log("ONLINE:", n);
-  online.innerText = n;
-});
+socket.on("online-count", n => online.innerText=n);
+socket.on("matched", ()=> statusEl.innerText="Connected with stranger");
+socket.on("message", m => addMsg("stranger",m));
+socket.on("partner_left", ()=> statusEl.innerText="Stranger left");
+socket.on("banned", m => { alert(m); location.reload(); });
 
-/* =====================
-   CHAT EVENTS
-===================== */
-socket.on("matched", () => {
-  statusEl.innerText = "Connected with stranger";
-});
+function agreeAge(){
+  document.getElementById("ageScreen").classList.add("hidden");
+  document.getElementById("modeScreen").classList.remove("hidden");
+}
 
-socket.on("message", msg => addMsg("stranger", msg));
+function goBack(){
+  document.getElementById("modeScreen").classList.add("hidden");
+  document.getElementById("ageScreen").classList.remove("hidden");
+}
 
-socket.on("partner_left", () => {
-  statusEl.innerText = "Stranger left";
-});
+function selectMode(mode){
+  chatMode = mode;
+  document.getElementById("modeScreen").classList.add("hidden");
+  document.getElementById("chatScreen").classList.remove("hidden");
+  if(mode==="video") startVideo();
+  socket.emit("join");
+}
 
-socket.on("banned", msg => {
-  alert(msg);
-  location.reload();
-});
-
-/* =====================
-   VIDEO
-===================== */
-let localStream = null;
-
-async function startLocalVideo() {
-  localStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:false });
+async function startVideo(){
+  const s = await navigator.mediaDevices.getUserMedia({video:true,audio:false});
   const v = document.createElement("video");
-  v.srcObject = localStream;
-  v.autoplay = true;
-  v.muted = true;
-  v.style.width = "100%";
-  document.getElementById("localVideo").innerHTML = "";
+  v.srcObject=s; v.autoplay=true; v.muted=true; v.style.width="100%";
   document.getElementById("localVideo").appendChild(v);
 }
 
-/* =====================
-   FUNCTIONS
-===================== */
-function startChat() {
-  document.getElementById("landing").style.display = "none";
-  startLocalVideo();
-  socket.emit("join");
-  statusEl.innerText = "Finding stranger…";
+function sendMsg(){
+  const i=document.getElementById("msgInput");
+  if(!i.value) return;
+  socket.emit("message",i.value);
+  addMsg("me",i.value);
+  i.value="";
 }
 
-function sendMsg() {
-  const text = input.value.trim();
-  if (!text) return;
-  socket.emit("message", text);
-  addMsg("me", text);
-  input.value = "";
-}
-
-function nextChat() {
-  messages.innerHTML = "";
+function nextChat(){
+  document.getElementById("messages").innerHTML="";
   socket.emit("next");
-  statusEl.innerText = "Finding new stranger…";
 }
 
-function report() {
-  socket.emit("report");
+function report(){ socket.emit("report"); }
+
+function addMsg(t,m){
+  const d=document.createElement("div");
+  d.className="msg "+t;
+  d.innerText=(t==="me"?"You: ":"Stranger: ")+m;
+  document.getElementById("messages").appendChild(d);
 }
 
-function addMsg(type, text) {
-  const d = document.createElement("div");
-  d.className = "msg " + type;
-  d.innerText = (type==="me"?"You: ":"Stranger: ") + text;
-  messages.appendChild(d);
-  messages.scrollTop = messages.scrollHeight;
-}
-
-function fullscreen() {
-  document.documentElement.requestFullscreen();
-}
+function fullscreen(){ document.documentElement.requestFullscreen(); }
 </script>
 </body>
 </html>
